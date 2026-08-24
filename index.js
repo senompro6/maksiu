@@ -22,7 +22,8 @@ function stworzBota() {
     host: 'craftmc.pl',
     port: 25565,
     username: 'maksiu',
-    version: '1.20.4'
+    version: '1.20.4',
+    connectTimeout: 30000 // Zwiększony czas oczekiwania na odpowiedź serwera
   });
 
   bot.loadPlugin(pathfinder);
@@ -42,29 +43,17 @@ function stworzBota() {
     }, 3000);
   });
 
-  // --- NOWA LOGIKA: PODGLĄD CZATU I WIADOMOŚCI SYSTEMOWYCH ---
-  
-  // Przechwytywanie zwykłych wiadomości od graczy
   bot.on('chat', (username, message) => {
-    // Ignoruj wiadomości wysyłane przez samego maksia, żeby nie robić spamu
     if (username === bot.username) return; 
     console.log(`[CZAT] <${username}> ${message}`);
   });
 
-  // Przechwytywanie komunikatów systemowych (wejścia graczy, komendy, ogłoszenia serwera)
   bot.on('message', (jsonMsg) => {
     const tekst = jsonMsg.toString().trim();
-    
-    // Ignorujemy puste linijki
     if (!tekst) return; 
-    
-    // Filtrujemy logowanie, żeby nie powtarzać zwykłego czatu w konsoli
     if (tekst.startsWith('<') && tekst.includes('>')) return; 
-
     console.log(`[SERWER] ${tekst}`);
   });
-
-  // -----------------------------------------------------------
 
   bot.on('windowOpen', async (window) => {
     console.log('Wykryto otwarte menu GUI. Szukam jabłka...');
@@ -78,42 +67,33 @@ function stworzBota() {
   });
 
   bot.on('respawn', () => {
-    console.log('Maksiu zmienił świat (respawn). Sprawdzam czy to Anarchia...');
     if (!naAnarchii) {
       naAnarchii = true;
-      console.log('Wykryto Anarchię! Czekam 3 sekundy na /rtp...');
       setTimeout(() => { bot.chat('/rtp'); }, 3000);
     }
   });
 
   bot.on('kicked', (reason) => {
-    console.log(`!!! BOT WYRZUCONY Z SERWERA !!! Powód: ${reason}`);
+    console.log(`!!! BOT WYRZUCONY Z SERWERA (KICK) !!! Powód: ${reason}`);
     naAnarchii = false;
-    console.log('Restart bota za 5 sekund...');
-    setTimeout(stworzBota, 5000);
+    console.log('Restart bota za 10 sekund...');
+    setTimeout(stworzBota, 10000);
   });
 
+  // ROZBUDOWANA OBSŁUGA BŁĘDÓW SIECIOWYCH
   bot.on('error', (err) => {
-    console.log('!!! WYSTĄPIŁ BŁĄD POŁĄCZENIA !!!');
-    console.error(err);
+    console.log('!!! WYSTĄPIŁ BŁĄD POŁĄCZENIA Z SERWEREM MINECRAFT !!!');
+    if (err.code === 'ECONNREFUSED') {
+      console.log('Błąd: Serwer Minecraft odrzucił połączenie (IP Rendera zablokowane/Anty-DDoS).');
+    } else if (err.code === 'ETIMEDOUT') {
+      console.log('Błąd: Przekroczono czas połączenia. Serwer nie odpowiada hostingowi.');
+    } else {
+      console.log('Szczegóły błędu:', err.message);
+    }
+    console.log('Próba ponownego uruchomienia za 15 sekund...');
+    setTimeout(stworzBota, 15000);
   });
-}
-
-async function idzIKliknijKompas(bot) {
-  const mcData = require('minecraft-data')(bot.version);
-  const movements = new Movements(bot, mcData);
-  bot.pathfinder.setMovements(movements);
-  const pozycjaStartowa = bot.entity.position;
-  const kierunekX = -Math.sin(bot.entity.yaw);
-  const kierunekZ = -Math.cos(bot.entity.yaw);
-  const celX = Math.round(pozycjaStartowa.x + (kierunekX * 10));
-  const celZ = Math.round(pozycjaStartowa.z + (kierunekZ * 10));
-  try {
-    await bot.pathfinder.goto(new GoalXZ(celX, celZ));
-    const kompas = bot.inventory.items().find(item => item.name === 'compass');
-    if (kompas) { await bot.equip(kompas, 'hand'); bot.activateItem(); }
-    else { bot.activateItem(); }
-  } catch (err) {}
 }
 
 stworzBota();
+
