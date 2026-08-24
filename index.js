@@ -42,6 +42,30 @@ function stworzBota() {
     }, 3000);
   });
 
+  // --- NOWA LOGIKA: PODGLĄD CZATU I WIADOMOŚCI SYSTEMOWYCH ---
+  
+  // Przechwytywanie zwykłych wiadomości od graczy
+  bot.on('chat', (username, message) => {
+    // Ignoruj wiadomości wysyłane przez samego maksia, żeby nie robić spamu
+    if (username === bot.username) return; 
+    console.log(`[CZAT] <${username}> ${message}`);
+  });
+
+  // Przechwytywanie komunikatów systemowych (wejścia graczy, komendy, ogłoszenia serwera)
+  bot.on('message', (jsonMsg) => {
+    const tekst = jsonMsg.toString().trim();
+    
+    // Ignorujemy puste linijki
+    if (!tekst) return; 
+    
+    // Filtrujemy logowanie, żeby nie powtarzać zwykłego czatu w konsoli
+    if (tekst.startsWith('<') && tekst.includes('>')) return; 
+
+    console.log(`[SERWER] ${tekst}`);
+  });
+
+  // -----------------------------------------------------------
+
   bot.on('windowOpen', async (window) => {
     console.log('Wykryto otwarte menu GUI. Szukam jabłka...');
     const slotJabłka = window.slots.findIndex((item, index) => {
@@ -73,6 +97,23 @@ function stworzBota() {
     console.log('!!! WYSTĄPIŁ BŁĄD POŁĄCZENIA !!!');
     console.error(err);
   });
+}
+
+async function idzIKliknijKompas(bot) {
+  const mcData = require('minecraft-data')(bot.version);
+  const movements = new Movements(bot, mcData);
+  bot.pathfinder.setMovements(movements);
+  const pozycjaStartowa = bot.entity.position;
+  const kierunekX = -Math.sin(bot.entity.yaw);
+  const kierunekZ = -Math.cos(bot.entity.yaw);
+  const celX = Math.round(pozycjaStartowa.x + (kierunekX * 10));
+  const celZ = Math.round(pozycjaStartowa.z + (kierunekZ * 10));
+  try {
+    await bot.pathfinder.goto(new GoalXZ(celX, celZ));
+    const kompas = bot.inventory.items().find(item => item.name === 'compass');
+    if (kompas) { await bot.equip(kompas, 'hand'); bot.activateItem(); }
+    else { bot.activateItem(); }
+  } catch (err) {}
 }
 
 stworzBota();
